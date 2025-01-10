@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css?family=Lato:400,700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+}
+
+html,
+body,
+#__next {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.bg-slack-sidebar {
+  background-color: #3F0E40;
+}
+
+.bg-slack-hover {
+  background-color: #350D36;
+}
+
+.text-slack-accent {
+  color: #E01E5A;
+}
+
+.bg-slack-accent {
+  background-color: #E01E5A;
+}
+
+.text-white {
+  color: #FFFFFF;
+}
+
+.channel-list {
+  li a {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    color: #FFFFFF;
+    text-decoration: none;
+    &:hover {
+      background-color: #350D36;
+    }
+  }
+}
+
+.Messages {
+  overflow-y: auto;
+}
