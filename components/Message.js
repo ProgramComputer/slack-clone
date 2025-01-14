@@ -177,7 +177,7 @@ const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
           )}
 
           {/* Add Reaction Button */}
-          <div className="relative mt-2">
+          <div className="relative mt-2 flex items-center gap-2">
             <button
               onClick={() => setShowEmojiPicker(!showEmojiPicker)}
               className="flex items-center text-gray-500 hover:text-gray-700 focus:outline-none"
@@ -188,6 +188,35 @@ const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
               <FaSmile size={16} />
               <span className="ml-1 text-sm">Add Reaction</span>
             </button>
+
+            {!message.thread_parent_id && !isThreadParent && (
+              <button
+                onClick={() => onThreadClick?.(message)}
+                className={`text-xs flex items-center gap-1 ${
+                  highlight ? 'text-indigo-600 hover:text-indigo-800' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <svg 
+                  className="w-3 h-3" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="2"
+                >
+                  <path d="M3 15l4-4 4 4" />
+                  <path d="M7 11V3" />
+                  <path d="M21 9h-8" />
+                  <path d="M21 15h-8" />
+                  <path d="M21 21h-8" />
+                </svg>
+                {message.reply_count > 0 ? (
+                  <span className={highlight ? 'font-medium' : ''}>{message.reply_count} replies</span>
+                ) : (
+                  <span className={highlight ? 'font-medium' : ''}>Reply in thread</span>
+                )}
+              </button>
+            )}
+
             {showEmojiPicker && (
               <div className="absolute z-10 mt-2" style={{ fontSize: '0.875em' }}>
                 <div className="shadow-lg rounded-lg" style={{ width: '20em' }}>
@@ -205,34 +234,6 @@ const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
               </div>
             )}
           </div>
-
-          {!message.thread_parent_id && !isThreadParent && (
-            <button
-              onClick={() => onThreadClick?.(message)}
-              className={`mt-1 text-xs flex items-center gap-1 ${
-                highlight ? 'text-indigo-600 hover:text-indigo-800' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <svg 
-                className="w-3 h-3" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2"
-              >
-                <path d="M3 15l4-4 4 4" />
-                <path d="M7 11V3" />
-                <path d="M21 9h-8" />
-                <path d="M21 15h-8" />
-                <path d="M21 21h-8" />
-              </svg>
-              {message.reply_count > 0 ? (
-                <span className={highlight ? 'font-medium' : ''}>{message.reply_count} replies</span>
-              ) : (
-                <span className={highlight ? 'font-medium' : ''}>Reply in thread</span>
-              )}
-            </button>
-          )}
         </div>
       </div>
     </div>
