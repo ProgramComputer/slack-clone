@@ -5,6 +5,7 @@ import UserContext from 'lib/UserContext'
 import { supabase } from 'lib/Store'
 import { jwtDecode } from 'jwt-decode'
 import { updateUserStatus } from 'lib/Store'
+import { AgentMessagesProvider } from 'lib/AgentMessagesProvider'
 
 export default function SupabaseSlackClone({ Component, pageProps }) {
   const [userLoaded, setUserLoaded] = useState(false)
@@ -28,8 +29,58 @@ export default function SupabaseSlackClone({ Component, pageProps }) {
       }
       setUser(currentUser ?? null)
       setUserLoaded(!!currentUser)
-      if (currentUser) {
+      if (currentUser && router.pathname === '/') {
         router.push('/channels/[id]', '/channels/1')
+      }
+
+      supabase.auth.getSession().then(({ data: { session } }) => saveSession(session))
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (event === 'SIGNED_OUT') {
+            if (user?.id) {
+              await updateUserStatus(user.id, 'OFFLINE')
+            }
+            saveSession(null)
+          } else if (session) {
+            saveSession(session)
+          }
+        }
+      )
+
+      // Set up status subscription
+      const statusSubscription = supabase
+        .channel('public:users')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'users'
+          },
+          (payload) => {
+            if (payload.new && user?.id === payload.new.id) {
+              setUser(prev => ({ ...prev, status: payload.new.status }))
+            }
+          }
+        )
+        .subscribe()
+
+      // Handle window/tab close
+      const handleBeforeUnload = async () => {
+        if (user?.id) {
+          await updateUserStatus(user.id, 'OFFLINE')
+        }
+      }
+      window.addEventListener('beforeunload', handleBeforeUnload)
+
+      return () => {
+        subscription.unsubscribe()
+        statusSubscription.unsubscribe()
+        window.removeEventListener('beforeunload', handleBeforeUnload)
+        if (user?.id) {
+          updateUserStatus(user.id, 'OFFLINE')
+        }
       }
     }
 
@@ -102,7 +153,9 @@ export default function SupabaseSlackClone({ Component, pageProps }) {
         signOut,
       }}
     >
-      <Component {...pageProps} />
+      <AgentMessagesProvider>
+        <Component {...pageProps} />
+      </AgentMessagesProvider>
     </UserContext.Provider>
   )
 }

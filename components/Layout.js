@@ -127,7 +127,7 @@ export default function Layout({ channels, activeChannelId, children }) {
         return prevDMs;
       });
       
-      router.push(`/channels/${channel.id}`)
+      router.push(`/channels/${channel.id}?recipient=${recipient.id}`)
       setDMModalOpen(false)
     }
   }
@@ -488,8 +488,7 @@ export default function Layout({ channels, activeChannelId, children }) {
               </button>
             </div>
             <ul className="space-y-1">
-              {
-              directMessages
+              {directMessages
                 .filter(channel => channel.is_direct)
                 .map((channel) => (
                   <SidebarItem
@@ -498,6 +497,7 @@ export default function Layout({ channels, activeChannelId, children }) {
                     isActiveChannel={channel.id === Number(activeChannelId)}
                     user={channel.other_participant.username}
                     userStatus={channel.other_participant.status}
+                    otherParticipantID={channel.other_participant.id}
                   />
                 ))}
             </ul>

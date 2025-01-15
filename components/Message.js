@@ -5,10 +5,14 @@ import { deleteMessage, addReaction, removeReaction } from '~/lib/Store';
 import { FaTrash, FaSmile, FaPaperclip } from 'react-icons/fa';
 import Picker from '@emoji-mart/react';
 import { supabase } from '~/lib/Store';
+import { useAgentMessages } from '~/lib/hooks/useAgentMessages';
+
 const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
   const { user } = useContext(UserContext);
+  const { deleteAgentMessage } = useAgentMessages();
   const authorUsername = message.author.username; 
   const isAuthor = user?.id === message.user_id;
+  const isAgentMessage = typeof message.message === 'string' && (message.message.startsWith('@agent') || message.isAgentResponse);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isHighlighted, setIsHighlighted] = useState(false);
   const [reactions, setReactions] = useState(message.reactions || []);
@@ -47,22 +51,25 @@ const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
 
   const handleDeleteMessage = async () => {
     try {
-      // Delete file from storage if message has an attachment
-      if (message.file_url) {
-        const filePathMatch = message.file_url.match(/\/uploads\/([^?]+)/);
-        if (filePathMatch) {
-          const filePath = filePathMatch[1];
-          const { data,error } = await supabase.storage
-            .from('uploads')
-            .remove([filePath]);
-          if (error) {
-            console.error('Error deleting file:', error);
+      if (isAgentMessage) {
+        // Delete agent message from context
+        deleteAgentMessage(message.id);
+      } else {
+        // Delete regular message from database
+        if (message.file_url) {
+          const filePathMatch = message.file_url.match(/\/uploads\/([^?]+)/);
+          if (filePathMatch) {
+            const filePath = filePathMatch[1];
+            const { data, error } = await supabase.storage
+              .from('uploads')
+              .remove([filePath]);
+            if (error) {
+              console.error('Error deleting file:', error);
+            }
           }
         }
+        await deleteMessage(message.id);
       }
-
-      // Delete the message
-      await deleteMessage(message.id);
     } catch (error) {
       console.error('Error deleting message and attachment:', error);
     }
@@ -97,7 +104,7 @@ const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
       id={`message-${message.id}`}
       className={`py-2 transition-colors duration-1000 ${
         isHighlighted ? 'bg-yellow-100 -mx-4 px-4' : ''
-      }`}
+      } ${isAgentMessage ? 'bg-gray-50' : ''}`}
     >
       <div className="flex items-start gap-3 py-2">
         {/* Avatar */}

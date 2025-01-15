@@ -1,15 +1,18 @@
 // components/MessageInput.js
 import { useState, useRef } from 'react';
-import { addMessage, uploadFile, addThreadReply } from '~/lib/Store';
+import { addMessage, uploadFile, addThreadReply, queryUserMessages } from '~/lib/Store';
 import { FaPaperPlane, FaSmile, FaPaperclip } from 'react-icons/fa';
 import TextareaAutosize from 'react-textarea-autosize';
 import Picker from '@emoji-mart/react';
+import { useAgentMessages } from '~/lib/hooks/useAgentMessages';
 
-const MessageInput = ({ channelId, userId, threadParentId, placeholder }) => {
+const MessageInput = ({ channelId, userId, threadParentId, placeholder, otherParticipantId }) => {
   const [messageText, setMessageText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
+  const { addAgentMessage, addAgentResponse } = useAgentMessages();
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,6 +24,41 @@ const MessageInput = ({ channelId, userId, threadParentId, placeholder }) => {
       if (!error) {
         fileUrl = data.publicUrl;
       }
+    }
+
+    // Check if this is an agent message
+    const isAgentMessage = messageText.trim().startsWith('@agent');
+    
+    if (isAgentMessage) {
+      setIsLoading(true);
+      try {
+        // Add the user's agent message locally
+      setMessageText('');
+        addAgentMessage(messageText, userId);
+        // Query the RAG system with otherParticipantId for DMs
+        const text = JSON.parse(JSON.stringify(messageText))
+        const response = await queryUserMessages(
+          text.replace('@agent', '').trim(), 
+          otherParticipantId
+        );
+        
+        if (response) {
+          // Add the agent's response locally
+          const responseText = typeof response === 'string' ? response : response.response;
+          addAgentResponse(responseText, 'agent');
+        } else {
+          // Handle error case
+          addAgentResponse("I'm sorry, I couldn't process your request at this time.", 'agent');
+        }
+      } catch (error) {
+        console.error('Error processing agent message:', error);
+        addAgentResponse("I'm sorry, an error occurred while processing your request.", 'agent');
+      } finally {
+        setIsLoading(false);
+      }
+
+      setSelectedFile(null);
+      return;
     }
 
     if (threadParentId) {
