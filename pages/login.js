@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { supabase } from 'lib/Store'
+import { useRouter } from 'next/router'
 import tailwindConfig from '../tailwind.config.js';
 
 const Home = () => {
   const [usernameOrEmail, setUsernameOrEmail] = useState('')
   const [password, setPassword] = useState('')
+  const router = useRouter()
 
   // Determine if the input is an email
   const isEmail = usernameOrEmail.includes('@')
@@ -16,20 +18,31 @@ const Home = () => {
       if (isEmail) {
         // Email/password authentication
         if (type === 'LOGIN') {
-          ({ data: { user }, error } = await supabase.auth.signInWithPassword({
+          const { data, error: signInError } = await supabase.auth.signInWithPassword({
             email: usernameOrEmail,
             password,
-          }))
+          })
+          error = signInError
+          user = data?.user
+          
+          if (!error && user) {
+            router.push('/channels/1')
+          }
         } else if (type === 'SIGNUP') {
-          ({ data: { user }, error } = await supabase.auth.signUp({
+          const { data, error: signUpError } = await supabase.auth.signUp({
             email: usernameOrEmail,
             password,
-            email_confirm: true,
-          }))
+            email_confirm: false,
+          })
+          error = signUpError
+          user = data?.user
         }
       } else {
         // Anonymous sign-in with username
-        ({ data: { user }, error } = await supabase.auth.signInAnonymously())
+        const { data, error: signInError } = await supabase.auth.signInAnonymously()
+        error = signInError
+        user = data?.user
+        
         if (user) {
           // Update the user's profile with the username
           const { error: updateError } = await supabase.from('users').upsert({
@@ -38,6 +51,8 @@ const Home = () => {
           })
           if (updateError) {
             alert('Error updating user profile: ' + updateError.message)
+          } else {
+            router.push('/channels/1')
           }
         }
       }

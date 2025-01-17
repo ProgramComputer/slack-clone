@@ -6,6 +6,8 @@ import { FaTrash, FaSmile, FaPaperclip } from 'react-icons/fa';
 import Picker from '@emoji-mart/react';
 import { supabase } from '~/lib/Store';
 import { useAgentMessages } from '~/lib/hooks/useAgentMessages';
+import ReactMarkdown from 'react-markdown';
+import ProfilePicture from './ProfilePicture';
 
 const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
   const { user } = useContext(UserContext);
@@ -109,11 +111,7 @@ const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
       <div className="flex items-start gap-3 py-2">
         {/* Avatar */}
         <div className="flex-shrink-0">
-          <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gray-300">
-            <span className="text-xl font-semibold text-white">
-              {authorUsername.charAt(0).toUpperCase()}
-            </span>
-          </div>
+          <ProfilePicture userId={message.user_id} size={40} />
         </div>
 
         {/* Message Content */}
@@ -136,7 +134,25 @@ const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
               </button>
             )}
           </div>
-          <p className="mt-1">{message.message}</p>
+          <div className="mt-1 prose prose-sm max-w-none">
+            <ReactMarkdown
+              components={{
+                // Customize component rendering
+                strong: ({node, ...props}) => <span className="font-bold" {...props} />,
+                em: ({node, ...props}) => <span className="italic" {...props} />,
+                code: ({node, inline, ...props}) => 
+                  inline ? (
+                    <code className="px-1.5 py-0.5 rounded bg-gray-100 text-sm font-mono" {...props} />
+                  ) : (
+                    <code {...props} />
+                  ),
+                del: ({node, ...props}) => <span className="line-through" {...props} />,
+                p: ({node, ...props}) => <div {...props} /> // Prevent nested <p> tags
+              }}
+            >
+              {message.message}
+            </ReactMarkdown>
+          </div>
 
           {message.file_url && (
             <div className="mt-2">

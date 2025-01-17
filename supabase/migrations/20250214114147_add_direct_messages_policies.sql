@@ -53,3 +53,42 @@ WITH CHECK (
   -- Access if the channel is not a direct message
   (SELECT is_direct FROM public.channels WHERE id = channel_id) = FALSE
 ); 
+
+
+REATE OR REPLACE FUNCTION handle_dm_channel_cleanup()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete DM channels where the deleted user was a participant
+    DELETE FROM public.channels 
+    WHERE is_direct = true 
+    AND id IN (
+        SELECT channel_id 
+        FROM channel_members 
+        WHERE user_id = OLD.id
+    );
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create the trigger that calls this function
+CREATE TRIGGER trigger_dm_channel_cleanup 
+    BEFORE DELETE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION handle_dm_channel_cleanup();
+
+-- Enable RLS on the auth.users table if not already enabled
+alter table auth.users enable row level security;
+
+-- Policy to allow users to read any user profile
+create policy "Users can view all user profiles"
+  on auth.users
+  for select
+  to authenticated
+  using (true);
+
+-- Policy to allow users to update their own profile
+create policy "Users can update own profile"
+  on auth.users
+  for update
+  to authenticated
+  using (auth.uid() = id);

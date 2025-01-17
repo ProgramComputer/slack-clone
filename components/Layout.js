@@ -3,9 +3,10 @@ import { useContext, useEffect, useState, useRef } from 'react'
 import UserContext from '~/lib/UserContext'
 import { addChannel, fetchDirectMessageChannels, createOrFetchDMChannel, supabase, updateUserStatus } from '~/lib/Store'
 import SidebarItem from '~/components/SidebarItem'
-import { FaSearch, FaPlus, FaUserCircle, FaMoon, FaCog, FaSignOutAlt } from 'react-icons/fa'
+import { FaSearch, FaPlus, FaMoon, FaCog, FaSignOutAlt } from 'react-icons/fa'
 import { useRouter } from 'next/router'
 import StatusIndicator from './StatusIndicator'
+import ProfilePicture from '~/components/ProfilePicture'
 
 export default function Layout({ channels, activeChannelId, children }) {
   const { signOut, user } = useContext(UserContext)
@@ -255,12 +256,13 @@ export default function Layout({ channels, activeChannelId, children }) {
     <div className="flex h-16 items-center justify-between px-4">
       <div className="flex items-center gap-2">
         <span className="relative flex shrink-0 overflow-hidden rounded-full h-8 w-8 border">
-          <span className="flex h-full w-full items-center justify-center rounded-full bg-gray-500">
-            {currentChannel?.is_direct ? 
-              getDisplayName().charAt(0).toUpperCase() :
-              '#'
-            }
-          </span>
+          {currentChannel?.is_direct ? (
+            <ProfilePicture userId={otherParticipantID} size={32} />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center rounded-full bg-gray-500 text-white">
+              #
+            </span>
+          )}
         </span>
         <div>
           <div className="font-medium">{getDisplayName()}</div>
@@ -374,7 +376,7 @@ export default function Layout({ channels, activeChannelId, children }) {
               className="flex items-center gap-2 font-semibold hover:opacity-75 transition-opacity"
             >
               <div className="relative">
-                <FaUserCircle className="h-6 w-6 text-blue-500" />
+                <ProfilePicture userId={user?.id} size={24} editable={false} />
                 <StatusIndicator 
                   status={user?.status} 
                   className="absolute -bottom-0.5 -right-0.5 ring-1 ring-slack-sidebar"
@@ -390,15 +392,15 @@ export default function Layout({ channels, activeChannelId, children }) {
                 <div className="p-4 border-b">
                   <div className="flex items-center gap-3">
                     <div className="relative">
-                      <FaUserCircle className="h-10 w-10 text-gray-400" />
+                      <ProfilePicture userId={user?.id} size={40} editable={true} />
                       <StatusIndicator 
                         status={user?.status} 
                         className="absolute -bottom-0.5 -right-0.5 ring-1 ring-white"
                       />
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900">{user?.username}</div>
-                      <div className="text-sm text-gray-500">Active</div>
+                      <div className="font-medium text-gray-900">{user?.email}</div>
+                      <div className="text-sm text-gray-500">{String(user?.status).charAt(0).toUpperCase() + String(user?.status).slice(1).toLowerCase()}</div>
                     </div>
                   </div>
                 </div>
@@ -409,22 +411,22 @@ export default function Layout({ channels, activeChannelId, children }) {
                   <div className="px-4 py-2 text-sm text-gray-500">Set yourself as</div>
                   <button
                     onClick={() => {
-                      updateUserStatus(user.id, 'ACTIVE')
+                      updateUserStatus(user.id, 'ONLINE')
                       setIsUserMenuOpen(false)
                     }}
                     className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                   >
-                    <StatusIndicator status="ACTIVE" className="ring-1 ring-white" />
-                    Active
+                    <StatusIndicator status="ONLINE" className="ring-1 ring-white" />
+                    Online
                   </button>
                   <button
                     onClick={() => {
-                      updateUserStatus(user.id, 'AWAY')
+                      updateUserStatus(user.id, 'OFFLINE')
                       setIsUserMenuOpen(false)
                     }}
                     className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                   >
-                    <StatusIndicator status="AWAY" className="ring-1 ring-white" />
+                    <StatusIndicator status="OFFLINE" className="ring-1 ring-white" />
                     Away
                   </button>
 
