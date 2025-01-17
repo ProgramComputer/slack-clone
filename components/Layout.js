@@ -76,26 +76,37 @@ export default function Layout({ channels, activeChannelId, children }) {
         async (payload) => {
           const newMessage = payload.new;
           
-          // Check if this is a DM channel and involves the current user
-          const { data: channel } = await supabase
+          // First check if this is a DM channel
+          const { data: channels, error } = await supabase
             .from('channels')
-            .select(`
-              *,
-              channel_members!inner(user_id)
-            `)
+            .select('*')
             .eq('id', newMessage.channel_id)
-            .eq('is_direct', true)
-            .single();
+            .eq('is_direct', true);
 
-          if (channel) {
-            const isUserInvolved = channel.channel_members.some(
-              member => member.user_id === user.id
-            );
+          // If we found a DM channel
+          if (channels && channels.length > 0) {
+            const channel = channels[0];
+            
+            // Then check if the current user is a member
+            const { data: channelsWithMembers, error: membersError } = await supabase
+              .from('channels')
+              .select(`
+                *,
+                channel_members!inner(user_id)
+              `)
+              .eq('id', channel.id);
 
-            if (isUserInvolved) {
-              // Fetch the updated DM channels to include the new message
-              const dms = await fetchDirectMessageChannels(user.id);
-              setDirectMessages(dms);
+            if (channelsWithMembers && channelsWithMembers.length > 0) {
+              const channelWithMembers = channelsWithMembers[0];
+              const isUserInvolved = channelWithMembers.channel_members.some(
+                member => member.user_id === user.id
+              );
+
+              if (isUserInvolved) {
+                // Fetch the updated DM channels to include the new message
+                const dms = await fetchDirectMessageChannels(user.id);
+                setDirectMessages(dms);
+              }
             }
           }
         }
@@ -187,22 +198,74 @@ export default function Layout({ channels, activeChannelId, children }) {
         break
       
       case 'messages':
-        const { data: messages } = await supabase
-          .from('messages')
-          .select(`
-            id,
-            message,
-            inserted_at,
-            user_id,
-            channel_id,
-            users:user_id (username),
-            channels:channel_id (slug, is_direct)
-          `)
-          .eq('channel_id', activeChannelId)
-          .ilike('message', `%${query}%`)
-          .order('inserted_at', { ascending: false })
-          .limit(10)
-        setSearchResults(messages || [])
+        // First get the embedding for the search query
+        const { data: embedding } = await supabase.functions.invoke('generate-embedding', {
+          body: { text: query }
+        })
+
+        // Get results from both regular search and semantic search
+        const [textSearchResult, semanticSearchResult] = await Promise.all([
+          // Regular text search
+          supabase
+            .from('messages')
+            .select(`
+              id,
+              message,
+              inserted_at,
+              user_id,
+              channel_id,
+              users:user_id (username),
+              channels:channel_id (slug, is_direct)
+            `)
+            .eq('channel_id', activeChannelId)
+            .ilike('message', `%${query}%`)
+            .order('inserted_at', { ascending: false })
+            .limit(10),
+
+          // Semantic search using match_messages_hybrid
+          supabase.rpc('match_messages_hybrid', {
+            query_text: query,
+            query_embedding: embedding,
+            match_threshold: 0.5,
+            match_count: 10,
+            p_user_id: user.id,
+            vector_weight: 0.7
+          })
+        ])
+
+        // Get full message details for semantic search results
+        const semanticMessages = semanticSearchResult.data?.length > 0
+          ? await supabase
+              .from('messages')
+              .select(`
+                id,
+                message,
+                inserted_at,
+                user_id,
+                channel_id,
+                users:user_id (username),
+                channels:channel_id (slug, is_direct)
+              `)
+              .in('id', semanticSearchResult.data.map(r => r.id))
+          : { data: [] }
+
+        // Combine and deduplicate results
+        const combinedResults = [
+          ...(textSearchResult.data || []),
+          ...(semanticMessages.data || [])
+        ].reduce((acc, curr) => {
+          if (!acc.some(item => item.id === curr.id)) {
+            acc.push(curr)
+          }
+          return acc
+        }, [])
+
+        // Sort by date
+        combinedResults.sort((a, b) => 
+          new Date(b.inserted_at) - new Date(a.inserted_at)
+        )
+
+        setSearchResults(combinedResults.slice(0, 10))
         break
     }
   }
@@ -256,8 +319,10 @@ export default function Layout({ channels, activeChannelId, children }) {
     <div className="flex h-16 items-center justify-between px-4">
       <div className="flex items-center gap-2">
         <span className="relative flex shrink-0 overflow-hidden rounded-full h-8 w-8 border">
-          {currentChannel?.is_direct ? (
-            <ProfilePicture userId={otherParticipantID} size={32} />
+          { currentChannel?.is_direct ? (
+            <ProfilePicture userId={currentChannel.channel_members.filter(
+              member => member.user_id !== user.id)[0].user_id
+            } size={32} />
           ) : (
             <span className="flex h-full w-full items-center justify-center rounded-full bg-gray-500 text-white">
               #
@@ -461,7 +526,7 @@ export default function Layout({ channels, activeChannelId, children }) {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-gray-300">Channels</h3>
               <button
-                onClick={handleAddChannel}
+                onClick={() => startSearch('channels')}
                 className="h-10 w-10 flex items-center justify-center rounded hover:bg-slack-hover"
               >
                 <FaPlus className="h-4 w-4" />

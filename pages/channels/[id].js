@@ -6,7 +6,7 @@ import { useStore } from '~/lib/Store'
 import { useContext, useEffect, useRef, useState } from 'react'
 import UserContext from '~/lib/UserContext'
 import ThreadView from '~/components/ThreadView'
-import { useAgentMessages } from '~/lib/hooks/useAgentMessages'
+import { useRAGMessages as useRAGMessages } from '~/lib/hooks/useRAGMessages'
 
 const ChannelsPage = () => {
   const router = useRouter()
@@ -14,7 +14,7 @@ const ChannelsPage = () => {
   const messagesEndRef = useRef(null)
   const [activeThread, setActiveThread] = useState(null)
   const [prevMessagesLength, setPrevMessagesLength] = useState(0)
-  const { agentMessages, clearAgentMessages } = useAgentMessages()
+  const { agentMessages: ragMessages } = useRAGMessages()
 
   const { id: channelId, highlight, recipient } = router.query
   const { messages, channels } = useStore({ channelId })
@@ -23,7 +23,7 @@ const ChannelsPage = () => {
   const currentChannel = channels.find(c => c.id === Number(channelId))
   const otherParticipantId = recipient;
   // Combine regular messages with agent messages
-  const allMessages = [...messages, ...agentMessages].sort((a, b) => 
+  const allMessages = [...messages, ...ragMessages].sort((a, b) => 
     new Date(a.inserted_at) - new Date(b.inserted_at)
   )
 
@@ -36,11 +36,11 @@ const ChannelsPage = () => {
 
   // Only scroll to bottom when new messages are added
   useEffect(() => {
-    if ((messages.length + agentMessages.length) > prevMessagesLength && !highlight) {
+    if ((messages.length + ragMessages.length) > prevMessagesLength && !highlight) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-    setPrevMessagesLength(messages.length + agentMessages.length)
-  }, [messages.length, agentMessages.length, prevMessagesLength, highlight])
+    setPrevMessagesLength(messages.length + ragMessages.length)
+  }, [messages.length, ragMessages.length, prevMessagesLength, highlight])
 
   // Show loading state while checking authentication
   if (!userLoaded || !user) {
@@ -60,7 +60,7 @@ const ChannelsPage = () => {
                 key={message.id} 
                 message={message}
                 highlight={message.id === parseInt(highlight)}
-                onThreadClick={!message.isAgentMessage && !message.isAgentResponse ? setActiveThread : undefined}
+                onThreadClick={!message.isRAGMessage && !message.isRagResponse ? setActiveThread : undefined}
               />
             ))}
             <div ref={messagesEndRef} />

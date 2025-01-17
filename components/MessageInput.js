@@ -1,18 +1,28 @@
 // components/MessageInput.js
 import { useState, useRef, useCallback } from 'react';
-import { addMessage, uploadFile, addThreadReply, queryUserMessages } from '~/lib/Store';
+import { addMessage, uploadFile, addThreadReply, queryMessages } from '~/lib/Store';
 import { FaPaperPlane, FaSmile, FaPaperclip, FaBold, FaItalic, FaCode, FaStrikethrough } from 'react-icons/fa';
 import TextareaAutosize from 'react-textarea-autosize';
 import Picker from '@emoji-mart/react';
-import { useAgentMessages } from '~/lib/hooks/useAgentMessages';
+import { useRAGMessages } from '~/lib/hooks/useRAGMessages';
+import { extractTextFromFile } from '~/lib/Store';
+import { supabase } from '~/lib/Store';
 
-const MessageInput = ({ channelId, userId, threadParentId, placeholder, otherParticipantId }) => {
+const MessageInput = ({ 
+  channelId, 
+  userId, 
+  threadParentId, 
+  placeholder, 
+  otherParticipantId,
+  onRAGMessage,
+  onRAGResponse 
+}) => {
   const [messageText, setMessageText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
-  const { addAgentMessage, addAgentResponse } = useAgentMessages();
+  const { addAgentMessage: addRAGMessage, addAgentResponse: addRAGResponse } = useRAGMessages();
   const [isLoading, setIsLoading] = useState(false);
 
   const insertFormatting = useCallback((startChar, endChar = startChar) => {
@@ -84,41 +94,72 @@ const MessageInput = ({ channelId, userId, threadParentId, placeholder, otherPar
     if (messageText.trim() === '' && !selectedFile) return;
 
     let fileUrl = null;
+    let extractedText = null;
     if (selectedFile) {
       const { data, error } = await uploadFile(selectedFile, userId);
+      extractedText = data.extractedText;
       if (!error) {
         fileUrl = data.publicUrl;
       }
     }
 
     // Check if this is an agent message
-    const isAgentMessage = messageText.trim().startsWith('@agent');
+    const isRAGMessage = messageText.trim().toLowerCase().startsWith('@rag');
     
-    if (isAgentMessage) {
+    if (isRAGMessage) {
       setIsLoading(true);
       try {
         // Add the user's agent message locally
-      setMessageText('');
-        addAgentMessage(messageText, userId);
-        // Query the RAG system with otherParticipantId for DMs
-        const text = JSON.parse(JSON.stringify(messageText))
-        const response = await queryUserMessages(
-          text.replace('@agent', '').trim(), 
-          otherParticipantId
+        setMessageText('');
+        
+        // Use thread-specific handlers if in a thread
+        if (threadParentId && onRAGMessage && onRAGResponse) {
+          onRAGMessage(messageText, userId);
+        } else {
+          addRAGMessage(messageText, userId);
+        }
+
+        // Determine context for RAG query
+        let queryContext = messageText.replace('@rag', '').trim();
+        
+        // If current message has a file, append its context
+        if (extractedText) {
+          queryContext += `\n\nContext from attached file:\n${extractedText}`;
+        }
+
+        // Query the RAG system
+        const response = await queryMessages(
+          queryContext,
+          threadParentId ? threadParentId : otherParticipantId,
+          threadParentId ? true : false
         );
         
         if (response) {
           // Add the agent's response locally
           const responseText = typeof response === 'string' ? response : response.response;
           // Add userID to allow deleting the message
-          addAgentResponse(responseText, userId);
+          if (threadParentId && onRAGMessage && onRAGResponse) {
+            onRAGResponse(responseText, userId);
+          } else {
+            addRAGResponse(responseText, userId);
+          }
         } else {
           // Handle error case
-          addAgentResponse("I'm sorry, I couldn't process your request at this time.", userId);
+          const errorMessage = "I'm sorry, I couldn't process your request at this time.";
+          if (threadParentId && onRAGMessage && onRAGResponse) {
+            onRAGResponse(errorMessage, userId);
+          } else {
+            addRAGResponse(errorMessage, userId);
+          }
         }
       } catch (error) {
         console.error('Error processing agent message:', error);
-        addAgentResponse("I'm sorry, an error occurred while processing your request.", userId);
+        const errorMessage = "I'm sorry, an error occurred while processing your request.";
+        if (threadParentId && onRAGMessage && onRAGResponse) {
+          onRAGResponse(errorMessage, userId);
+        } else {
+          addRAGResponse(errorMessage, userId);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -127,14 +168,44 @@ const MessageInput = ({ channelId, userId, threadParentId, placeholder, otherPar
       return;
     }
 
+    let id = null;
     if (threadParentId) {
-      await addThreadReply(messageText, fileUrl, channelId, userId, threadParentId);
+      id = await addThreadReply(messageText, fileUrl, channelId, userId, threadParentId);
     } else {
-      await addMessage(messageText, fileUrl, channelId, userId);
+      id = await addMessage(messageText, fileUrl, channelId, userId);
+    }
+    id = id?.id;
+    // Generate embedding for the message
+    if (id) {
+      const fullMessageText = extractedText ? `${messageText} ${extractedText}` : messageText;
+      
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-embedding`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+          },
+          body: JSON.stringify({
+            type: 'INSERT',
+            record: {
+              id: Number(id),
+              message: fullMessageText,
+            }
+          })
+        });
+      } catch (error) {
+        console.error('Error generating embedding:', error);
+      }
     }
 
     setMessageText('');
     setSelectedFile(null);
+    // Reset the file input so the same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+
   };
 
   const handleFileSelect = (e) => {

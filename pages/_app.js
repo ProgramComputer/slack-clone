@@ -5,7 +5,7 @@ import UserContext from 'lib/UserContext'
 import { supabase } from 'lib/Store'
 import { jwtDecode } from 'jwt-decode'
 import { updateUserStatus } from 'lib/Store'
-import { AgentMessagesProvider } from 'lib/AgentMessagesProvider'
+import { RagMessagesProvider } from '~/lib/RAGMessagesProvider'
 
 export default function SupabaseSlackClone({ Component, pageProps }) {
   const router = useRouter()
@@ -123,9 +123,9 @@ export default function SupabaseSlackClone({ Component, pageProps }) {
         signOut,
       }}
     >
-      <AgentMessagesProvider>
+      <RagMessagesProvider>
         <Component {...pageProps} />
-      </AgentMessagesProvider>
+      </RagMessagesProvider>
     </UserContext.Provider>
   )
 }

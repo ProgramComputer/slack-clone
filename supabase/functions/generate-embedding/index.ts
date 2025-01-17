@@ -14,12 +14,14 @@ const corsHeaders = {
 
 
 Deno.serve(async (req) => {
-
+ if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
   try {
     const payload = await req.json()
     
-    if (payload.type !== 'INSERT' || !payload.record.message) {
-      return new Response(JSON.stringify({ message: 'Not a new message insert' }), {
+    if (payload.type !== 'INSERT' || !payload.record.message || payload.record.file_url) {
+      return new Response(JSON.stringify({ message: 'Not a valid message for embedding generation' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
       })

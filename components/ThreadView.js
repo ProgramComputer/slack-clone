@@ -8,8 +8,41 @@ import { supabase } from '~/lib/Store.js';
 
 const ThreadView = ({ parentMessage, onClose }) => {
   const [replies, setReplies] = useState([]);
+  const [threadRAGMessages, setThreadRAGMessages] = useState([]);
   const { user } = useContext(UserContext);
   
+  const addThreadRAGMessage = (message, userId) => {
+    const newMessage = {
+      id: `thread-rag-${Date.now()}`,
+      message: message,
+      user_id: userId,
+      inserted_at: new Date().toISOString(),
+      author: { username: 'You' },
+      reactions: [],
+      isRAGMessage: true,
+      thread_parent_id: parentMessage.id
+    };
+    setThreadRAGMessages(prev => [...prev, newMessage]);
+  };
+
+  const addThreadRAGResponse = (response, userId) => {
+    const newMessage = {
+      id: `thread-rag-response-${Date.now()}`,
+      message: response,
+      user_id: userId,
+      inserted_at: new Date().toISOString(),
+      author: { username: 'Agent' },
+      reactions: [],
+      isRAGResponse: true,
+      thread_parent_id: parentMessage.id
+    };
+    setThreadRAGMessages(prev => [...prev, newMessage]);
+  };
+
+  const deleteThreadRAGMessage = (messageId) => {
+    setThreadRAGMessages(prev => prev.filter(message => message.id !== messageId));
+  };
+
   useEffect(() => {
     const loadReplies = async () => {
       const threadReplies = await fetchThreadReplies(parentMessage.id);
@@ -44,6 +77,17 @@ const ThreadView = ({ parentMessage, onClose }) => {
           }
         }
       )
+      .on('postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'messages',
+          filter: `thread_parent_id=eq.${parentMessage.id}`
+        },
+        (payload) => {
+          setReplies(current => current.filter(message => message.id !== payload.old.id));
+        }
+      )
       .subscribe();
 
     // Cleanup subscription
@@ -51,6 +95,11 @@ const ThreadView = ({ parentMessage, onClose }) => {
       supabase.removeChannel(threadListener);
     };
   }, [parentMessage.id]);
+
+  // Combine regular replies with RAG messages
+  const allReplies = [...replies, ...threadRAGMessages].sort((a, b) => 
+    new Date(a.inserted_at) - new Date(b.inserted_at)
+  );
 
   return (
     <div className="flex flex-col h-full border-l border-gray-200">
@@ -71,8 +120,13 @@ const ThreadView = ({ parentMessage, onClose }) => {
         </div>
         
         <div className="py-4">
-          {replies.map((reply) => (
-            <Message key={reply.id} message={reply} isThreadReply />
+          {allReplies.map((reply) => (
+            <Message 
+              key={reply.id} 
+              message={reply} 
+              isThreadReply 
+              onDeleteRAGMessage={deleteThreadRAGMessage}
+            />
           ))}
         </div>
       </div>
@@ -83,6 +137,8 @@ const ThreadView = ({ parentMessage, onClose }) => {
           userId={user.id}
           threadParentId={parentMessage.id}
           placeholder="Reply in thread..."
+          onRAGMessage={addThreadRAGMessage}
+          onRAGResponse={addThreadRAGResponse}
         />
       </div>
     </div>

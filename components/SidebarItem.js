@@ -2,12 +2,12 @@
   import { useRouter } from 'next/router';
   import { FaLock } from 'react-icons/fa';
   import StatusIndicator from './StatusIndicator';
-  import { useAgentMessages } from '~/lib/hooks/useAgentMessages';
+  import { useRAGMessages } from '~/lib/hooks/useRAGMessages';
   import ProfilePicture from './ProfilePicture';
 
   const SidebarItem = ({ channel, isActiveChannel, user, userStatus, otherParticipantID }) => {
     const isDirect = channel.is_direct;
-    const { clearAgentMessages } = useAgentMessages();
+    const { clearAgentMessages } = useRAGMessages();
     const router = useRouter();
 
     const displayName = isDirect

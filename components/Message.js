@@ -5,16 +5,16 @@ import { deleteMessage, addReaction, removeReaction } from '~/lib/Store';
 import { FaTrash, FaSmile, FaPaperclip } from 'react-icons/fa';
 import Picker from '@emoji-mart/react';
 import { supabase } from '~/lib/Store';
-import { useAgentMessages } from '~/lib/hooks/useAgentMessages';
+import { useRAGMessages } from '~/lib/hooks/useRAGMessages';
 import ReactMarkdown from 'react-markdown';
 import ProfilePicture from './ProfilePicture';
 
-const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
+const Message = ({ message, highlight, onThreadClick, isThreadParent, onDeleteRAGMessage }) => {
   const { user } = useContext(UserContext);
-  const { deleteAgentMessage } = useAgentMessages();
+  const { deleteAgentMessage } = useRAGMessages();
   const authorUsername = message.author.username; 
   const isAuthor = user?.id === message.user_id;
-  const isAgentMessage = typeof message.message === 'string' && (message.message.startsWith('@agent') || message.isAgentResponse);
+  const isRAGMessage = message.isRAGMessage || message.isRAGResponse || (typeof message.message === 'string' && message.message.startsWith('@rag'));
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isHighlighted, setIsHighlighted] = useState(false);
   const [reactions, setReactions] = useState(message.reactions || []);
@@ -53,25 +53,44 @@ const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
 
   const handleDeleteMessage = async () => {
     try {
-      if (isAgentMessage) {
-        // Delete agent message from context
-        deleteAgentMessage(message.id);
-      } else {
-        // Delete regular message from database
-        if (message.file_url) {
-          const filePathMatch = message.file_url.match(/\/uploads\/([^?]+)/);
-          if (filePathMatch) {
-            const filePath = filePathMatch[1];
-            const { data, error } = await supabase.storage
+      if (isRAGMessage) {
+        // Check if this is a thread-local RAG message
+        if (message.thread_parent_id && onDeleteRAGMessage) {
+          // Delete thread RAG message from local state only
+          onDeleteRAGMessage(message.id);
+        } else {
+          // Delete global RAG message
+          deleteAgentMessage(message.id);
+        }
+        return;
+      }
+
+      // Delete regular message from database
+      if (message.file_url) {
+        const filePathMatch = message.file_url.match(/\/uploads\/([^?]+)/);
+        if (filePathMatch) {
+          const filePath = filePathMatch[1];
+          // Extract the folder name (everything up to the last slash)
+          const folderPath = filePath.substring(0, filePath.lastIndexOf('/'));
+          
+          // List all files in the folder
+          const { data: files, error: listError } = await supabase.storage
+            .from('uploads')
+            .list(folderPath);
+
+          if (!listError && files?.length > 0) {
+            // Delete all files in the folder
+            const { error: deleteError } = await supabase.storage
               .from('uploads')
-              .remove([filePath]);
-            if (error) {
-              console.error('Error deleting file:', error);
+              .remove(files.map(file => `${folderPath}/${file.name}`));
+
+            if (deleteError) {
+              console.error('Error deleting files:', deleteError);
             }
           }
         }
-        await deleteMessage(message.id);
       }
+      await deleteMessage(message.id);
     } catch (error) {
       console.error('Error deleting message and attachment:', error);
     }
@@ -106,7 +125,7 @@ const Message = ({ message, highlight, onThreadClick, isThreadParent }) => {
       id={`message-${message.id}`}
       className={`py-2 transition-colors duration-1000 ${
         isHighlighted ? 'bg-yellow-100 -mx-4 px-4' : ''
-      } ${isAgentMessage ? 'bg-gray-50' : ''}`}
+      } ${isRAGMessage ? 'bg-gray-50' : ''}`}
     >
       <div className="flex items-start gap-3 py-2">
         {/* Avatar */}
