@@ -1,11 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  webpack: (config) => {
-    config.devtool = 'source-map';
-    
+  /*webpack: (config,options) => {
+    if(!options.isServer) {
+      config.devtool = options.isServer ? 'source-map':false;
+    }
     return config;
-  },
+  },*/
 }
 
 module.exports = nextConfig

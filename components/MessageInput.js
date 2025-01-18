@@ -65,35 +65,7 @@ const MessageInput = ({
     }, 0);
   }, [messageText]);
 
-  const handleKeyDown = useCallback((e) => {
-    // Handle keyboard shortcuts
-    if (e.ctrlKey || e.metaKey) {
-      switch(e.key) {
-        case 'b':
-          e.preventDefault();
-          insertFormatting('**');
-          break;
-        case 'i':
-          e.preventDefault();
-          insertFormatting('_');
-          break;
-        case '`':
-          e.preventDefault();
-          insertFormatting('`');
-          break;
-        case 'd':
-          e.preventDefault();
-          insertFormatting('~~');
-          break;
-      }
-    } else if (e.key === 'Enter') {
-      // If shift is pressed, allow default behavior (new line)
-      if (!e.shiftKey) {
-        e.preventDefault();
-        handleSubmit(e);
-      }
-    }
-  }, [insertFormatting, handleSubmit]);
+ 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -213,7 +185,35 @@ const MessageInput = ({
     }
 
   };
-
+ const handleKeyDown = useCallback((e) => {
+    // Handle keyboard shortcuts
+    if (e.ctrlKey || e.metaKey) {
+      switch(e.key) {
+        case 'b':
+          e.preventDefault();
+          insertFormatting('**');
+          break;
+        case 'i':
+          e.preventDefault();
+          insertFormatting('_');
+          break;
+        case '`':
+          e.preventDefault();
+          insertFormatting('`');
+          break;
+        case 'd':
+          e.preventDefault();
+          insertFormatting('~~');
+          break;
+      }
+    } else if (e.key === 'Enter') {
+      // If shift is pressed, allow default behavior (new line)
+      if (!e.shiftKey) {
+        e.preventDefault();
+        handleSubmit(e);
+      }
+    }
+  }, [insertFormatting, handleSubmit]);
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
