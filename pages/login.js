@@ -36,6 +36,9 @@ const Home = () => {
           })
           error = signUpError
           user = data?.user
+          if(!error && user) {
+            router.push('/channels/1')
+          }
         }
       } else {
         // Anonymous sign-in with username
