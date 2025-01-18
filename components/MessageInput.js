@@ -86,8 +86,14 @@ const MessageInput = ({
           insertFormatting('~~');
           break;
       }
+    } else if (e.key === 'Enter') {
+      // If shift is pressed, allow default behavior (new line)
+      if (!e.shiftKey) {
+        e.preventDefault();
+        handleSubmit(e);
+      }
     }
-  }, [insertFormatting]);
+  }, [insertFormatting, handleSubmit]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

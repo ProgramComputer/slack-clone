@@ -7,6 +7,10 @@ import { FaSearch, FaPlus, FaMoon, FaCog, FaSignOutAlt } from 'react-icons/fa'
 import { useRouter } from 'next/router'
 import StatusIndicator from './StatusIndicator'
 import ProfilePicture from '~/components/ProfilePicture'
+import { PhoneButton } from './voice-chat/phone-button'
+import { VoiceModal } from './voice-chat/voice-modal'
+import { useVoiceChat } from '~/lib/hooks/useVoiceChat'
+import { toast } from 'sonner'
 
 export default function Layout({ channels, activeChannelId, children }) {
   const { signOut, user } = useContext(UserContext)
@@ -20,6 +24,14 @@ export default function Layout({ channels, activeChannelId, children }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const searchInputRef = useRef(null)
+  const [isVoiceChatOpen, setIsVoiceChatOpen] = useState(false)
+
+  // Get the current channel
+  let currentChannel = channels.find((c) => c.id === Number(activeChannelId));
+  // Initialize voice chat
+  const { status, isAISpeaking, currentText, connect, disconnect, audioElement, audioStream, localStream } = useVoiceChat(
+    currentChannel?.other_participant?.id
+  )
 
   // Fetch direct message channels and set up status listener
   useEffect(() => {
@@ -138,7 +150,6 @@ export default function Layout({ channels, activeChannelId, children }) {
         }
         return prevDMs;
       });
-      
       router.push(`/channels/${channel.id}?recipient=${recipient.id}`)
       setDMModalOpen(false)
     }
@@ -154,9 +165,6 @@ export default function Layout({ channels, activeChannelId, children }) {
       }
     }
   }
-
-  // Get the current channel
-  const currentChannel = channels.find((c) => c.id === Number(activeChannelId));
 
   // Get display name based on channel type
   const getDisplayName = () => {
@@ -199,7 +207,7 @@ export default function Layout({ channels, activeChannelId, children }) {
       
       case 'messages':
         // First get the embedding for the search query
-        const { data: embedding } = await supabase.functions.invoke('generate-embedding', {
+        const { data: embedding } = await supabase.functions.invoke('create-embedding', {
           body: { text: query }
         })
 
@@ -225,12 +233,15 @@ export default function Layout({ channels, activeChannelId, children }) {
           // Semantic search using match_messages_hybrid
           supabase.rpc('match_messages_hybrid', {
             query_text: query,
-            query_embedding: embedding,
+            query_embedding: embedding.embedding,
             match_threshold: 0.5,
             match_count: 10,
-            p_user_id: user.id,
             vector_weight: 0.7
-          })
+          }, {
+          headers: {
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
+          }
+        })
         ])
 
         // Get full message details for semantic search results
@@ -315,40 +326,50 @@ export default function Layout({ channels, activeChannelId, children }) {
     }
   }
 
-  const renderHeader = () => (
-    <div className="flex h-16 items-center justify-between px-4">
-      <div className="flex items-center gap-2">
-        <span className="relative flex shrink-0 overflow-hidden rounded-full h-8 w-8 border">
-          { currentChannel?.is_direct ? (
-            <ProfilePicture userId={currentChannel.channel_members.filter(
-              member => member.user_id !== user.id)[0].user_id
-            } size={32} />
-          ) : (
-            <span className="flex h-full w-full items-center justify-center rounded-full bg-gray-500 text-white">
-              #
-            </span>
+  const handleVoiceChatToggle = () => {
+    if (isVoiceChatOpen) {
+      disconnect()
+      setIsVoiceChatOpen(false)
+    } else {
+      connect()
+      setIsVoiceChatOpen(true)
+    }
+  }
+
+  const renderHeader = () => {
+    const isDM = currentChannel?.is_direct
+    const otherParticipant = currentChannel?.other_participant
+    return (
+      <header className="flex items-center justify-between px-6 py-4 border-b">
+        <div className="flex items-center gap-3">
+          {isDM && otherParticipant && (
+            <div className="flex items-center gap-2">
+              <ProfilePicture userId={otherParticipant?.id} size={32} />
+              <StatusIndicator status={otherParticipant?.status} />
+            </div>
           )}
-        </span>
-        <div>
-          <div className="font-medium">{getDisplayName()}</div>
-          <div className="text-sm text-gray-500">
-            {currentChannel?.is_direct ? 'Direct Message' : 'Channel'}
-          </div>
+          <h1 className="text-xl font-semibold">
+            {getDisplayName()}
+          </h1>
         </div>
-      </div>
-      
-      <div className="flex-1 max-w-2xl mx-4 flex items-center justify-end gap-2">
-        <button
-          onClick={() => startSearch('messages')}
-          className="p-2 hover:bg-gray-100 rounded-md flex items-center gap-2 text-sm text-gray-600"
-        >
-          <FaSearch className="h-4 w-4" />
-          <span>Search Messages</span>
-          <span className="text-xs text-gray-400">⌘K</span>
-        </button>
-      </div>
-    </div>
-  )
+
+        <div className="flex items-center gap-2">
+          {isDM && (
+            <PhoneButton 
+              onClick={handleVoiceChatToggle} 
+              isActive={isVoiceChatOpen} 
+            />
+          )}
+          <button
+            onClick={() => startSearch('messages')}
+            className="p-2 hover:bg-gray-100 rounded-full dark:hover:bg-gray-800"
+          >
+            <FaSearch className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+    )
+  }
 
   const renderSearchOverlay = () => (
     isSearchOpen && (
@@ -587,6 +608,20 @@ export default function Layout({ channels, activeChannelId, children }) {
           onClose={() => setDMModalOpen(false)}
           onSelectUser={handleSelectUser}
           currentUserId={user.id}
+        />
+      )}
+      {/* Voice chat modal */}
+      { currentChannel?.is_direct && (
+        <VoiceModal
+          isOpen={isVoiceChatOpen}
+          onClose={handleVoiceChatToggle}
+          otherParticipant={currentChannel.other_participant}
+          status={status}
+          isAISpeaking={isAISpeaking}
+          currentText={currentText}
+          audioElement={audioElement}
+          audioStream={audioStream}
+          localStream={localStream}
         />
       )}
     </div>

@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
   try {
     const { query, id,isParentThread } = await req.json()
     console.log(query, id)
-    const authHeader = req.headers.get('Authorization')!
+    const authHeader = req.headers.get('Authorization')
     const supabaseClient = createClient(
       Deno.env.get('URL') ?? '',
       Deno.env.get('SERVICE_ROLE') ?? '',
@@ -86,16 +86,25 @@ Deno.serve(async (req) => {
 
     } else {
       // Regular user message search
-      //TODO:  Use hybrid search instead of match_messages
-      const { data, error } = await supabaseClient.rpc('match_messages', {
-        match_count: 5,
-        match_threshold: 0.01,
+      const { data, error } = await supabaseClient.rpc('match_messages_hybrid', {
+        query_text: query,
         query_embedding: queryEmbedding,
-        p_user_id: id
+        match_threshold: 0.5,
+        match_count: 10,
+        p_user_id: id,
+        vector_weight: 0.7
       })
-      context = data 
-        .map(msg => `${msg.message} (Similarity: ${msg.similarity})`)
-        .join('\n')
+
+      if (error) throw error;
+      
+      context = data
+        ?.map(msg => {
+          const vectorScore = (msg.vector_score * 100).toFixed(2);
+          const textScore = (msg.text_score * 100).toFixed(2);
+          const combinedScore = (msg.similarity * 100).toFixed(2);
+          return `Message: ${msg.message}\nRelevance Scores: Combined: ${combinedScore}%, Vector: ${vectorScore}%, Text: ${textScore}%\n`;
+        })
+        .join('\n') || 'No relevant context found.';
     }
 
 
