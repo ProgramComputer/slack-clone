@@ -31,7 +31,7 @@ const ThreadView = ({ parentMessage, onClose }) => {
       message: response,
       user_id: userId,
       inserted_at: new Date().toISOString(),
-      author: { username: 'Agent' },
+      author: { username: 'RAG' },
       reactions: [],
       isRAGResponse: true,
       thread_parent_id: parentMessage.id
